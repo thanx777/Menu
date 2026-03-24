@@ -199,6 +199,50 @@ Menu_List_BindFirstLevel(&menu_System, &menu_About);
 
 ---
 
+#### Menu_List_InitSingleFirstLevel - 初始化单个一级菜单
+
+```c
+bool Menu_List_InitSingleFirstLevel(MENUITEM *pMenu);
+```
+
+| 参数 | 说明 |
+|------|------|
+| pMenu | 一级菜单节点指针 |
+| **返回值** | true=成功，false=失败 |
+
+**使用场景：** 当一级菜单只有一个节点时使用
+
+**使用示例：**
+```c
+/* 只有一个一级菜单的情况 */
+static MENUITEM menu_Main = {"主菜单", NULL, NULL, NULL, NULL, NULL};
+
+void Menu_Init(void) {
+    Menu_Stack_Init(&g_MenuStack);
+    
+    /* 初始化单个一级菜单（形成自环） */
+    Menu_List_InitSingleFirstLevel(&menu_Main);
+    
+    /* 绑定子菜单 */
+    Menu_List_BindChild(&menu_Main, &menu_Sub1);
+    Menu_List_BindChild(&menu_Main, &menu_Sub2);
+    
+    Menu_Stack_Push(&g_MenuStack, &menu_Main);
+    g_pDisplayFirst = &menu_Main;
+    
+    Menu_UI_Display();
+}
+```
+
+**效果：**
+```
+主菜单（自环）
+  ├── 子菜单1
+  └── 子菜单2
+```
+
+---
+
 ### 5.2 栈操作函数
 
 #### Menu_Stack_Init - 初始化导航栈
@@ -1221,6 +1265,7 @@ void Action_Brightness_Set(void) {
 | `Menu_Key_Process()` | 处理按键 | 按键扫描后调用 |
 | `Menu_UI_Display()` | 刷新显示 | 需要刷新时调用 |
 | `Menu_List_BindChild()` | 绑定子菜单 | Menu_Init()中调用 |
-| `Menu_List_BindFirstLevel()` | 绑定一级菜单 | Menu_Init()中调用 |
+| `Menu_List_BindFirstLevel()` | 绑定多个一级菜单 | Menu_Init()中调用 |
+| `Menu_List_InitSingleFirstLevel()` | 初始化单个一级菜单 | 一级菜单只有一个时 |
 | `Menu_Stack_Push()` | 压栈 | 进入子菜单时 |
 | `Menu_Stack_Pop()` | 弹栈 | 返回上级时 |

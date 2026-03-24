@@ -36,6 +36,19 @@
 bool Menu_List_BindChild(MENUITEM *pParent, MENUITEM *pChild);
 
 /**
+ * @brief  初始化单个一级菜单节点（自环）
+ * @param  pMenu 一级菜单节点指针
+ * @return true=成功，false=失败
+ * @note   当一级菜单只有一个节点时调用此函数
+ *         使用示例：
+ *         MENUITEM menu = {"主菜单", NULL, NULL, NULL, NULL, NULL};
+ *         Menu_List_InitSingleFirstLevel(&menu);
+ *         
+ *         初始化后：menu.pNextMenu 和 menu.pPrevMenu 都指向自身
+ */
+bool Menu_List_InitSingleFirstLevel(MENUITEM *pMenu);
+
+/**
  * @brief  绑定一级菜单节点
  * @param  pFirst 一级菜单的首个节点
  * @param  pNew   待添加的新一级菜单节点
@@ -46,6 +59,8 @@ bool Menu_List_BindChild(MENUITEM *pParent, MENUITEM *pChild);
  *         Menu_List_BindFirstLevel(&menu1, &menu2);
  *         
  *         绑定后：menu1 ↔ menu2 形成循环双向链表
+ *         
+ *         注意：如果只有一个一级菜单，请使用 Menu_List_InitSingleFirstLevel()
  */
 bool Menu_List_BindFirstLevel(MENUITEM *pFirst, MENUITEM *pNew);
 
