@@ -10,6 +10,7 @@
 6. [菜单构建步骤](#6-菜单构建步骤)
 7. [完整示例](#7-完整示例)
 8. [常见问题](#8-常见问题)
+9. [Action函数编写指南](#9-action函数编写指南)
 
 ---
 
@@ -354,23 +355,375 @@ int main(void) {
 
 ## 7. 完整示例
 
-### 菜单结构
+### 7.1 示例场景
+
+假设我们要构建一个智能温控器的菜单系统，包含以下功能：
 
 ```
 主菜单
-├── 系统设置
-│   ├── LED控制      [执行功能]
-│   └── 亮度调节      [执行功能]
-├── 显示设置
-│   └── 高级设置
-│       ├── 对比度
-│       └── 刷新率
-└── 关于            [执行功能]
+├── 温度设置          [子菜单]
+│   ├── 目标温度      [参数调节]
+│   └── 温度校准      [参数调节]
+├── 系统设置          [子菜单]
+│   ├── LED控制       [开关功能]
+│   ├── 蜂鸣器        [开关功能]
+│   └── 恢复出厂      [执行功能]
+└── 关于设备          [显示信息]
 ```
 
-### 代码实现
+### 7.2 第一步：定义功能函数
 
-参见 [Menu_Init.c](Menu_Init.c) 文件
+在 `Menu_Init.c` 中定义各个功能函数：
+
+```c
+#include "stm32f10x.h"
+#include "Menu_Def.h"
+#include "Menu_Func.h"
+#include "Menu_UI.h"
+
+/* 全局变量 */
+static uint8_t g_TargetTemp = 25;
+static uint8_t g_Calibration = 0;
+static uint8_t g_LEDSate = 0;
+static uint8_t g_BuzzerState = 0;
+
+/*---------------------------------- 功能函数 ----------------------------------*/
+
+/**
+ * @brief 目标温度调节
+ * @note  这是一个参数调节型菜单项的典型实现
+ */
+void Action_TargetTemp(void) {
+    OLED_Clear();
+    
+    while(1) {
+        /* 显示当前温度 */
+        OLED_Printf(0, 0, OLED_8X16, "目标温度");
+        OLED_Printf(0, 24, OLED_8X16, "  %d C", g_TargetTemp);
+        OLED_Printf(0, 48, OLED_8X16, "+  -  返回");
+        OLED_Update();
+        
+        /* 按键处理 */
+        uint8_t key = Key_Scan();
+        if (key == MENU_KEY_UP) {
+            if (g_TargetTemp < 35) g_TargetTemp++;
+        }
+        else if (key == MENU_KEY_DOWN) {
+            if (g_TargetTemp > 10) g_TargetTemp--;
+        }
+        else if (key == MENU_KEY_BACK) {
+            break;  /* 退出调节，返回菜单 */
+        }
+        Delay_ms(150);
+    }
+    
+    /* 退出前清屏，让菜单系统重新渲染 */
+    OLED_Clear();
+}
+
+/**
+ * @brief 温度校准
+ */
+void Action_Calibration(void) {
+    OLED_Clear();
+    
+    while(1) {
+        OLED_Printf(0, 0, OLED_8X16, "温度校准");
+        OLED_Printf(0, 24, OLED_8X16, "  %+d C", (int8_t)g_Calibration);
+        OLED_Printf(0, 48, OLED_8X16, "+  -  返回");
+        OLED_Update();
+        
+        uint8_t key = Key_Scan();
+        if (key == MENU_KEY_UP) {
+            if (g_Calibration < 10) g_Calibration++;
+        }
+        else if (key == MENU_KEY_DOWN) {
+            if (g_Calibration > 0) g_Calibration--;
+        }
+        else if (key == MENU_KEY_BACK) {
+            break;
+        }
+        Delay_ms(150);
+    }
+    
+    OLED_Clear();
+}
+
+/**
+ * @brief LED开关
+ * @note  这是一个简单的开关型菜单项
+ */
+void Action_LED_Toggle(void) {
+    g_LEDSate = !g_LEDSate;
+    
+    if (g_LEDSate) {
+        GPIO_SetBits(GPIOA, GPIO_Pin_5);
+    } else {
+        GPIO_ResetBits(GPIOA, GPIO_Pin_5);
+    }
+    
+    /* 显示反馈 */
+    OLED_Clear();
+    OLED_Printf(0, 24, OLED_8X16, "LED: %s", g_LEDSate ? "ON" : "OFF");
+    OLED_Update();
+    Delay_ms(500);
+}
+
+/**
+ * @brief 蜂鸣器开关
+ */
+void Action_Buzzer_Toggle(void) {
+    g_BuzzerState = !g_BuzzerState;
+    
+    if (g_BuzzerState) {
+        GPIO_SetBits(GPIOB, GPIO_Pin_8);
+    } else {
+        GPIO_ResetBits(GPIOB, GPIO_Pin_8);
+    }
+    
+    OLED_Clear();
+    OLED_Printf(0, 24, OLED_8X16, "Buzzer: %s", g_BuzzerState ? "ON" : "OFF");
+    OLED_Update();
+    Delay_ms(500);
+}
+
+/**
+ * @brief 恢复出厂设置
+ * @note  这是一个执行型菜单项，执行一次操作
+ */
+void Action_FactoryReset(void) {
+    OLED_Clear();
+    OLED_Printf(0, 0, OLED_8X16, "恢复出厂?");
+    OLED_Printf(0, 24, OLED_8X16, "确认  取消");
+    OLED_Update();
+    
+    while(1) {
+        uint8_t key = Key_Scan();
+        if (key == MENU_KEY_CONFIRM) {
+            /* 执行恢复操作 */
+            g_TargetTemp = 25;
+            g_Calibration = 0;
+            g_LEDSate = 0;
+            g_BuzzerState = 0;
+            GPIO_ResetBits(GPIOA, GPIO_Pin_5);
+            GPIO_ResetBits(GPIOB, GPIO_Pin_8);
+            
+            OLED_Clear();
+            OLED_Printf(0, 24, OLED_8X16, "已恢复!");
+            OLED_Update();
+            Delay_ms(1000);
+            break;
+        }
+        else if (key == MENU_KEY_BACK) {
+            break;
+        }
+    }
+    
+    OLED_Clear();
+}
+
+/**
+ * @brief 显示关于信息
+ */
+void Action_About(void) {
+    OLED_Clear();
+    OLED_Printf(0, 0, OLED_8X16, "智能温控器");
+    OLED_Printf(0, 16, OLED_8X16, "Ver: 1.0.0");
+    OLED_Printf(0, 32, OLED_8X16, "2024-01-01");
+    OLED_Printf(0, 48, OLED_8X16, "按返回键退出");
+    OLED_Update();
+    
+    while(1) {
+        if (Key_Scan() == MENU_KEY_BACK) {
+            break;
+        }
+    }
+    
+    OLED_Clear();
+}
+```
+
+### 7.3 第二步：定义菜单节点
+
+```c
+/*---------------------------------- 一级菜单 ----------------------------------*/
+
+static MENUITEM menu_TempSetting = {
+    "温度设置",       /* 显示名称 */
+    NULL,             /* 无功能函数（有子菜单） */
+    NULL,             /* 父菜单：一级菜单为NULL */
+    NULL,             /* 子菜单：在Menu_Init中绑定 */
+    NULL,             /* 前驱：自动绑定 */
+    NULL              /* 后继：自动绑定 */
+};
+
+static MENUITEM menu_System = {
+    "系统设置",
+    NULL,
+    NULL, NULL, NULL, NULL
+};
+
+static MENUITEM menu_About = {
+    "关于设备",
+    Action_About,     /* 直接绑定功能函数 */
+    NULL, NULL, NULL, NULL
+};
+
+/*---------------------------------- 二级菜单 ----------------------------------*/
+
+/* 温度设置的子菜单 */
+static MENUITEM menu_TargetTemp = {
+    "目标温度",
+    Action_TargetTemp,  /* 绑定参数调节函数 */
+    NULL, NULL, NULL, NULL
+};
+
+static MENUITEM menu_Calibration = {
+    "温度校准",
+    Action_Calibration,
+    NULL, NULL, NULL, NULL
+};
+
+/* 系统设置的子菜单 */
+static MENUITEM menu_LED = {
+    "LED控制",
+    Action_LED_Toggle,  /* 绑定开关函数 */
+    NULL, NULL, NULL, NULL
+};
+
+static MENUITEM menu_Buzzer = {
+    "蜂鸣器",
+    Action_Buzzer_Toggle,
+    NULL, NULL, NULL, NULL
+};
+
+static MENUITEM menu_Reset = {
+    "恢复出厂",
+    Action_FactoryReset,  /* 绑定执行函数 */
+    NULL, NULL, NULL, NULL
+};
+```
+
+### 7.4 第三步：构建菜单关系
+
+```c
+void Menu_Init(void) {
+    /* 1. 初始化导航栈 */
+    Menu_Stack_Init(&g_MenuStack);
+    
+    /* 2. 绑定一级菜单（形成循环链表） */
+    /*    温度设置 ↔ 系统设置 ↔ 关于设备 ↔ 温度设置 */
+    Menu_List_BindFirstLevel(&menu_TempSetting, &menu_System);
+    Menu_List_BindFirstLevel(&menu_TempSetting, &menu_About);
+    
+    /* 3. 绑定二级菜单 */
+    /*    温度设置
+     *      ├── 目标温度
+     *      └── 温度校准 */
+    Menu_List_BindChild(&menu_TempSetting, &menu_TargetTemp);
+    Menu_List_BindChild(&menu_TempSetting, &menu_Calibration);
+    
+    /*    系统设置
+     *      ├── LED控制
+     *      ├── 蜂鸣器
+     *      └── 恢复出厂 */
+    Menu_List_BindChild(&menu_System, &menu_LED);
+    Menu_List_BindChild(&menu_System, &menu_Buzzer);
+    Menu_List_BindChild(&menu_System, &menu_Reset);
+    
+    /* 4. 设置初始显示 */
+    Menu_Stack_Push(&g_MenuStack, &menu_TempSetting);
+    g_pDisplayFirst = &menu_TempSetting;
+    
+    /* 5. 首次渲染 */
+    Menu_UI_Display();
+}
+```
+
+### 7.5 第四步：主函数调用
+
+```c
+#include "Menu_Init.h"
+
+int main(void) {
+    /* 硬件初始化 */
+    OLED_Init();
+    Key_Init();
+    GPIO_Init(GPIOA, GPIO_Pin_5, GPIO_Mode_Out_PP);  /* LED */
+    GPIO_Init(GPIOB, GPIO_Pin_8, GPIO_Mode_Out_PP);  /* Buzzer */
+    
+    /* 菜单初始化 */
+    Menu_Init();
+    
+    /* 主循环 */
+    while(1) {
+        uint8_t key = Key_Scan();
+        if (key != 0) {
+            Menu_Key_Process(key);
+        }
+        Delay_ms(10);
+    }
+}
+```
+
+### 7.6 菜单类型总结
+
+| 菜单类型 | action字段 | pChildMenu字段 | 典型用途 |
+|----------|------------|----------------|----------|
+| **目录型** | NULL | 非NULL | 进入子菜单，如"温度设置" |
+| **功能型** | 非NULL | NULL | 执行功能，如"LED控制" |
+| **参数型** | 非NULL | NULL | 参数调节，如"目标温度" |
+| **混合型** | 非NULL | 非NULL | 优先进入子菜单（不推荐） |
+
+### 7.7 绑定关系图示
+
+```
+绑定函数调用顺序与结果：
+
+Menu_List_BindFirstLevel(&menu_TempSetting, &menu_System);
+Menu_List_BindFirstLevel(&menu_TempSetting, &menu_About);
+
+    ┌─────────────┐
+    │  温度设置   │ ← 一级菜单首节点
+    └──────┬──────┘
+           │ pNext
+           ▼
+    ┌─────────────┐
+    │  系统设置   │
+    └──────┬──────┘
+           │ pNext
+           ▼
+    ┌─────────────┐
+    │  关于设备   │
+    └──────┬──────┘
+           │ pNext (循环)
+           ▼
+    ┌─────────────┐
+    │  温度设置   │ ← 回到首节点
+    └─────────────┘
+
+
+Menu_List_BindChild(&menu_TempSetting, &menu_TargetTemp);
+Menu_List_BindChild(&menu_TempSetting, &menu_Calibration);
+
+    温度设置 (父菜单)
+        │
+        │ pChildMenu
+        ▼
+    ┌─────────────┐
+    │  目标温度   │ ← 子菜单首节点
+    └──────┬──────┘
+           │ pNext
+           ▼
+    ┌─────────────┐
+    │  温度校准   │
+    └──────┬──────┘
+           │ pNext (循环)
+           ▼
+    ┌─────────────┐
+    │  目标温度   │ ← 回到首节点
+    └─────────────┘
+```
 
 ---
 
@@ -410,7 +763,437 @@ uint8_t Key_Scan(void) {
 }
 ```
 
-### Q5: 如何实现参数调节菜单？
+### Q5: action函数中按返回键需要手动弹栈吗？
+
+**不需要！** 这是本菜单系统的重要设计原则。
+
+#### 栈操作规则
+
+| 操作 | 栈变化 | 说明 |
+|------|--------|------|
+| 进入子菜单 | 压栈当前选中项 | 记录位置，返回时恢复 |
+| 执行action | **不压栈** | action是叶子节点，无需记录 |
+| 从子菜单返回 | 弹栈 | 恢复到进入前的选中位置 |
+| 从action返回 | **不弹栈** | 因为根本没有压栈 |
+
+#### 流程图解
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        栈操作流程                                    │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  场景：从"系统设置"进入"LED控制"（action函数）                        │
+│                                                                     │
+│  ┌──────────────┐                                                   │
+│  │   系统设置    │ ← 当前选中项                                      │
+│  │   LED控制    │                                                   │
+│  │   亮度调节    │                                                   │
+│  └──────────────┘                                                   │
+│         │                                                           │
+│         │ 按确认键                                                   │
+│         ▼                                                           │
+│  ┌──────────────┐     栈状态：[系统设置]                             │
+│  │  LED控制     │ ← 执行 Action_LED_Toggle()                        │
+│  │  (action)    │     注意：栈没有变化！                              │
+│  └──────────────┘                                                   │
+│         │                                                           │
+│         │ action函数内按返回键                                        │
+│         │ (只是 break 退出循环)                                       │
+│         ▼                                                           │
+│  ┌──────────────┐     栈状态：[系统设置]                             │
+│  │   系统设置    │ ← 自动回到菜单界面                                 │
+│  │   LED控制    │     选中项仍然是"系统设置"                          │
+│  │   亮度调节    │                                                   │
+│  └──────────────┘                                                   │
+│                                                                     │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  场景：从"系统设置"进入"高级设置"（子菜单）                           │
+│                                                                     │
+│  ┌──────────────┐                                                   │
+│  │   系统设置    │ ← 当前选中项                                      │
+│  │   高级设置    │                                                   │
+│  └──────────────┘                                                   │
+│         │                                                           │
+│         │ 按确认键                                                   │
+│         ▼                                                           │
+│  ┌──────────────┐     栈状态：[高级设置]                             │
+│  │   对比度      │ ← 进入子菜单，压栈"高级设置"                       │
+│  │   刷新率      │     显示子菜单内容                                 │
+│  └──────────────┘                                                   │
+│         │                                                           │
+│         │ 按返回键                                                   │
+│         ▼                                                           │
+│  ┌──────────────┐     栈状态：[] (弹栈后)                            │
+│  │   系统设置    │ ← 弹栈恢复到"高级设置"                             │
+│  │   高级设置    │ ← 选中项恢复到进入前的位置                          │
+│  └──────────────┘                                                   │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+#### action函数的正确写法
+
+```c
+void Action_LED_Toggle(void) {
+    static uint8_t state = 0;
+    state = !state;
+    
+    if (state) {
+        GPIO_SetBits(GPIOA, GPIO_Pin_5);
+    } else {
+        GPIO_ResetBits(GPIOA, GPIO_Pin_5);
+    }
+    
+    /* 简单的开关型：执行完直接返回 */
+    /* 不需要处理返回键，菜单系统会自动刷新 */
+}
+
+void Action_Brightness_Set(void) {
+    OLED_Clear();
+    
+    while(1) {
+        /* 显示当前亮度 */
+        OLED_Printf(0, 0, OLED_8X16, "亮度调节");
+        OLED_Printf(0, 24, OLED_8X16, "  %d", brightness);
+        OLED_Update();
+        
+        /* 自己处理按键 */
+        uint8_t key = Key_Scan();
+        if (key == MENU_KEY_UP)   brightness++;
+        if (key == MENU_KEY_DOWN) brightness--;
+        if (key == MENU_KEY_BACK) break;  /* 只是退出循环，不弹栈 */
+        
+        Delay_ms(100);
+    }
+    
+    /* 退出循环后，菜单系统会自动刷新 */
+    /* 不需要手动调用任何栈操作函数 */
+}
+```
+
+#### 重要提醒
+
+1. **action函数中不要调用** `Menu_Key_Process()`，这会导致递归
+2. **action函数中不要调用** `Menu_Stack_Pop()`，因为栈中没有压入新元素
+3. **action函数退出后**，菜单系统会自动调用 `Menu_UI_Display()` 刷新
+
+---
+
+## 9. Action函数编写指南
+
+Action函数是菜单系统的核心扩展点，本节详细介绍各类Action函数的编写规范。
+
+### 9.1 Action函数类型总览
+
+| 类型 | 特点 | 典型应用 | 是否需要while循环 |
+|------|------|----------|-------------------|
+| **即时执行型** | 执行完立即返回 | LED开关、复位 | ❌ 不需要 |
+| **参数调节型** | 需要持续交互 | 亮度、温度调节 | ✅ 需要 |
+| **信息展示型** | 显示信息等待退出 | 关于、帮助 | ✅ 需要 |
+| **确认对话框型** | 等待用户确认 | 恢复出厂、删除 | ✅ 需要 |
+
+### 9.2 即时执行型Action
+
+**特点**：执行一次操作后立即返回菜单
+
+```c
+/**
+ * @brief LED开关 - 即时执行型示例
+ * @note  执行完直接返回，无需while循环
+ */
+void Action_LED_Toggle(void) {
+    static uint8_t state = 0;
+    
+    state = !state;
+    
+    if (state) {
+        GPIO_SetBits(GPIOA, GPIO_Pin_5);
+    } else {
+        GPIO_ResetBits(GPIOA, GPIO_Pin_5);
+    }
+    
+    /* 函数结束，自动返回菜单 */
+}
+```
+
+### 9.3 参数调节型Action
+
+**特点**：需要while循环持续响应按键
+
+```c
+/**
+ * @brief 温度调节 - 参数调节型示例
+ * @note  必须用while循环持续处理按键
+ */
+void Action_TempAdjust(void) {
+    static int8_t temp = 25;
+    
+    OLED_Clear();  /* 清屏准备新界面 */
+    
+    while(1) {
+        /* ========== 1. 显示界面 ========== */
+        OLED_Printf(0, 0, OLED_8X16, "目标温度");
+        OLED_Printf(0, 24, OLED_8X16, "  %d C", temp);
+        OLED_Printf(0, 48, OLED_8X16, "+  -  返回");
+        OLED_Update();  /* 刷新显示 */
+        
+        /* ========== 2. 按键处理 ========== */
+        uint8_t key = Key_Scan();
+        
+        switch(key) {
+            case MENU_KEY_UP:
+                if (temp < 35) temp++;
+                break;
+                
+            case MENU_KEY_DOWN:
+                if (temp > 10) temp--;
+                break;
+                
+            case MENU_KEY_BACK:
+                /* 退出循环，返回菜单 */
+                goto exit;
+        }
+        
+        Delay_ms(150);  /* 消抖延时 */
+    }
+    
+exit:
+    OLED_Clear();  /* 退出前清屏 */
+    /* 函数结束，菜单系统自动刷新 */
+}
+```
+
+### 9.4 信息展示型Action
+
+**特点**：显示信息，等待用户按返回键退出
+
+```c
+/**
+ * @brief 关于信息 - 信息展示型示例
+ */
+void Action_About(void) {
+    OLED_Clear();
+    
+    /* 显示静态信息 */
+    OLED_Printf(0, 0, OLED_8X16, "智能温控器");
+    OLED_Printf(0, 16, OLED_8X16, "版本: 1.0.0");
+    OLED_Printf(0, 32, OLED_8X16, "日期: 2024-01");
+    OLED_Printf(0, 48, OLED_8X16, "按返回键退出");
+    OLED_Update();
+    
+    /* 等待返回键 */
+    while(1) {
+        if (Key_Scan() == MENU_KEY_BACK) {
+            break;
+        }
+    }
+    
+    OLED_Clear();
+}
+```
+
+### 9.5 确认对话框型Action
+
+**特点**：需要用户确认后才执行操作
+
+```c
+/**
+ * @brief 恢复出厂设置 - 确认对话框型示例
+ */
+void Action_FactoryReset(void) {
+    uint8_t selected = 0;  /* 0=取消, 1=确认 */
+    
+    OLED_Clear();
+    
+    while(1) {
+        /* 显示确认对话框 */
+        OLED_Printf(0, 0, OLED_8X16, "恢复出厂设置?");
+        
+        if (selected == 0) {
+            OLED_Printf(0, 32, OLED_8X16, "[取消]  确认");
+        } else {
+            OLED_Printf(0, 32, OLED_8X16, " 取消  [确认]");
+        }
+        
+        OLED_Update();
+        
+        /* 按键处理 */
+        uint8_t key = Key_Scan();
+        
+        switch(key) {
+            case MENU_KEY_UP:
+            case MENU_KEY_DOWN:
+                selected = !selected;  /* 切换选项 */
+                break;
+                
+            case MENU_KEY_CONFIRM:
+                if (selected == 1) {
+                    /* 执行恢复操作 */
+                    OLED_Clear();
+                    OLED_Printf(0, 24, OLED_8X16, "正在恢复...");
+                    OLED_Update();
+                    
+                    /* 这里执行实际的恢复逻辑 */
+                    Delay_ms(1000);
+                    
+                    OLED_Clear();
+                    OLED_Printf(0, 24, OLED_8X16, "恢复完成!");
+                    OLED_Update();
+                    Delay_ms(500);
+                }
+                goto exit;
+                
+            case MENU_KEY_BACK:
+                goto exit;
+        }
+        
+        Delay_ms(150);
+    }
+    
+exit:
+    OLED_Clear();
+}
+```
+
+### 9.6 Action函数编写模板
+
+#### 模板A：即时执行型
+
+```c
+void Action_XXX(void) {
+    /* 1. 执行操作 */
+    
+    /* 2. 可选：显示反馈 */
+    
+    /* 自动返回菜单 */
+}
+```
+
+#### 模板B：交互型（参数调节/信息展示/确认对话框）
+
+```c
+void Action_XXX(void) {
+    /* 1. 初始化变量 */
+    static int value = 0;
+    
+    /* 2. 清屏 */
+    OLED_Clear();
+    
+    /* 3. 主循环 */
+    while(1) {
+        /* 3.1 显示界面 */
+        OLED_Printf(...);
+        OLED_Update();
+        
+        /* 3.2 按键处理 */
+        uint8_t key = Key_Scan();
+        
+        switch(key) {
+            case MENU_KEY_UP:
+                /* 处理上键 */
+                break;
+                
+            case MENU_KEY_DOWN:
+                /* 处理下键 */
+                break;
+                
+            case MENU_KEY_CONFIRM:
+                /* 处理确认键（可选） */
+                break;
+                
+            case MENU_KEY_BACK:
+                /* 退出循环 */
+                goto exit;
+        }
+        
+        /* 3.3 延时消抖 */
+        Delay_ms(150);
+    }
+    
+exit:
+    /* 4. 清理工作 */
+    OLED_Clear();
+    /* 自动返回菜单 */
+}
+```
+
+### 9.7 常见错误与修正
+
+| 错误写法 | 正确写法 | 原因 |
+|----------|----------|------|
+| `Menu_Key_Process(key)` | `Key_Scan()` + `switch` | 避免递归 |
+| `Menu_Stack_Pop()` | 不调用栈操作 | action不压栈 |
+| `Menu_UI_Display()` | 不调用 | 系统自动调用 |
+| 忘记 `OLED_Clear()` | 进入/退出时清屏 | 避免残留 |
+| 忘记 `OLED_Update()` | 显示后调用 | 刷新屏幕 |
+
+### 9.8 完整示例：多级参数调节
+
+```c
+/**
+ * @brief PID参数调节 - 复杂参数调节示例
+ */
+void Action_PID_Adjust(void) {
+    typedef enum {
+        PARAM_KP = 0,
+        PARAM_KI,
+        PARAM_KD,
+        PARAM_COUNT
+    } ParamType;
+    
+    static float params[PARAM_COUNT] = {1.0f, 0.1f, 0.5f};
+    static const char* names[] = {"Kp", "Ki", "Kd"};
+    uint8_t selected = PARAM_KP;
+    
+    OLED_Clear();
+    
+    while(1) {
+        /* 显示所有参数 */
+        OLED_Printf(0, 0, OLED_8X16, "PID参数调节");
+        
+        for (uint8_t i = 0; i < PARAM_COUNT; i++) {
+            if (i == selected) {
+                OLED_Printf(0, 16 + i * 16, OLED_8X16, ">%s=%.2f", 
+                    names[i], params[i]);
+            } else {
+                OLED_Printf(0, 16 + i * 16, OLED_8X16, " %s=%.2f", 
+                    names[i], params[i]);
+            }
+        }
+        
+        OLED_Update();
+        
+        uint8_t key = Key_Scan();
+        
+        switch(key) {
+            case MENU_KEY_UP:
+                if (selected > 0) selected--;
+                break;
+                
+            case MENU_KEY_DOWN:
+                if (selected < PARAM_COUNT - 1) selected++;
+                break;
+                
+            case MENU_KEY_CONFIRM:
+                /* 进入参数微调模式 */
+                params[selected] += 0.1f;  /* 简化示例 */
+                break;
+                
+            case MENU_KEY_BACK:
+                goto exit;
+        }
+        
+        Delay_ms(150);
+    }
+    
+exit:
+    OLED_Clear();
+}
+```
+
+### Q6: 如何实现参数调节菜单？
 
 在action函数中实现调节逻辑：
 

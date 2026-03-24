@@ -118,8 +118,8 @@ void Menu_Key_Process(uint16_t KeyNum) {
  * @brief  确认键处理函数
  * 
  * @note   处理逻辑：
- *         1. 有子菜单 → 进入子菜单（压栈 + 更新显示起点）
- *         2. 无子菜单但有 action → 执行功能函数
+ *         1. 有子菜单 → 进入子菜单（压栈当前节点 + 更新显示起点为子菜单头）
+ *         2. 无子菜单但有 action → 执行功能函数（不压栈）
  *         3. 无子菜单无 action → 无操作
  *         
  *         进入子菜单流程：
@@ -129,6 +129,9 @@ void Menu_Key_Process(uint16_t KeyNum) {
  *              ↑                            │
  *              │        压栈记录路径         │
  *              └────────────────────────────┘
+ *         
+ *         重要：压栈的是当前选中的菜单项，而不是子菜单头节点
+ *         这样返回时可以恢复到之前的选中位置
  */
 static void Menu_Key_Confirm(void) {
     if (g_pDisplayFirst == NULL) {
@@ -136,7 +139,7 @@ static void Menu_Key_Confirm(void) {
     }
 
     if (g_pDisplayFirst->pChildMenu != NULL) {
-        if (Menu_Stack_Push(&g_MenuStack, g_pDisplayFirst->pChildMenu)) {
+        if (Menu_Stack_Push(&g_MenuStack, g_pDisplayFirst)) {
             g_pDisplayFirst = g_pDisplayFirst->pChildMenu;
         }
     }
@@ -149,28 +152,32 @@ static void Menu_Key_Confirm(void) {
  * @brief  返回键处理函数
  * 
  * @note   处理逻辑：
- *         1. 栈为空或只剩一个元素 → 已在一级菜单，无操作
- *         2. 栈中有多个元素 → 弹栈，返回上级菜单
+ *         1. 栈为空 → 无操作
+ *         2. 栈中只有一个元素（一级菜单）→ 恢复到初始位置
+ *         3. 栈中有多个元素 → 弹栈，恢复到父菜单的选中位置
  *         
  *         返回上级菜单流程：
  *         ┌─────────┐      返回键      ┌─────────┐
  *         │ 子菜单  │ ──────────────→ │ 父菜单  │
  *         └─────────┘                  └─────────┘
  *              │                            ↑
- *              │        弹栈恢复路径         │
+ *              │        弹栈恢复位置         │
  *              └────────────────────────────┘
+ *         
+ *         重要：栈中存储的是进入子菜单前的选中位置
+ *         弹栈后直接恢复到该位置
  */
 static void Menu_Key_Back(void) {
     if (Menu_Stack_IsEmpty(&g_MenuStack)) {
         return;
     }
     
-    if (g_MenuStack.top <= 1) {
+    if (g_MenuStack.top == 1) {
+        g_pDisplayFirst = g_MenuStack.items[0];
         return;
     }
     
-    Menu_Stack_Pop(&g_MenuStack);
-    g_pDisplayFirst = Menu_Stack_GetTop(&g_MenuStack);
+    g_pDisplayFirst = Menu_Stack_Pop(&g_MenuStack);
 }
 
 /**
