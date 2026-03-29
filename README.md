@@ -4,13 +4,14 @@
 
 1. [系统概述](#1-系统概述)
 2. [文件结构](#2-文件结构)
-3. [核心数据结构](#3-核心数据结构)
-4. [快速入门](#4-快速入门)
-5. [API函数详解](#5-api函数详解)
-6. [菜单构建步骤](#6-菜单构建步骤)
-7. [完整示例](#7-完整示例)
-8. [常见问题](#8-常见问题)
-9. [Action函数编写指南](#9-action函数编写指南)
+3. [平台移植](#3-平台移植)
+4. [核心数据结构](#4-核心数据结构)
+5. [快速入门](#5-快速入门)
+6. [API函数详解](#6-api函数详解)
+7. [菜单构建步骤](#7-菜单构建步骤)
+8. [完整示例](#8-完整示例)
+9. [常见问题](#9-常见问题)
+10. [Action函数编写指南](#10-action函数编写指南)
 
 ---
 
@@ -60,9 +61,108 @@
 
 ---
 
-## 3. 核心数据结构
+## 3. 平台移植
 
-### 3.1 菜单节点 (MENUITEM)
+本菜单系统支持多种开发平台，通过条件编译实现平台切换。
+
+### 3.1 支持的平台
+
+| 平台 | 宏定义 | 头文件 |
+|------|--------|--------|
+| STM32 标准库 | `MENU_USE_STD_LIB` | `stm32f10x.h` |
+| STM32 HAL库 | `MENU_USE_HAL_LIB` | `stm32f1xx_hal.h` |
+| 其他平台 | 两者都为0 | 自行添加 |
+
+### 3.2 切换平台
+
+在以下文件开头修改宏定义：
+- `Menu_UI.c`
+- `Menu_Func.c`
+- `Menu_Init.c`
+
+```c
+/*============================================================================*/
+/*                          平台头文件选择                                     */
+/*============================================================================*/
+/*
+ * 使用说明：根据你的开发平台，选择对应的头文件
+ * 
+ * 方式1：标准库（STM32F10x）
+ *   #define MENU_USE_STD_LIB    1
+ *   #define MENU_USE_HAL_LIB    0
+ * 
+ * 方式2：HAL库（STM32F1xx）
+ *   #define MENU_USE_STD_LIB    0
+ *   #define MENU_USE_HAL_LIB    1
+ * 
+ * 方式3：其他平台（如ESP32、Arduino等）
+ *   #define MENU_USE_STD_LIB    0
+ *   #define MENU_USE_HAL_LIB    0
+ *   然后在下方添加你的平台头文件
+ */
+
+#define MENU_USE_STD_LIB    1    /* 改为 0 禁用标准库 */
+#define MENU_USE_HAL_LIB    0    /* 改为 1 启用HAL库 */
+
+#if MENU_USE_STD_LIB
+    #include "stm32f10x.h"
+#elif MENU_USE_HAL_LIB
+    #include "stm32f1xx_hal.h"
+#else
+    /* 其他平台头文件 */
+#endif
+```
+
+### 3.3 移植到其他平台
+
+1. **修改宏定义**
+   ```c
+   #define MENU_USE_STD_LIB    0
+   #define MENU_USE_HAL_LIB    0
+   ```
+
+2. **添加平台头文件**
+   ```c
+   #else
+       #include "esp_idf.h"    /* 例如：ESP-IDF */
+       // 或
+       #include "Arduino.h"    /* 例如：Arduino */
+   #endif
+   ```
+
+3. **适配OLED驱动**
+   - 修改 `OLED_W_SCL()` 和 `OLED_W_SDA()` 函数中的GPIO操作
+   - 修改延时函数调用
+
+### 3.4 OLED驱动适配
+
+OLED驱动需要适配以下硬件相关函数：
+
+| 函数 | 位置 | 说明 |
+|------|------|------|
+| `OLED_W_SCL()` | OLED.c | SCL引脚高低电平控制 |
+| `OLED_W_SDA()` | OLED.c | SDA引脚高低电平控制 |
+| `OLED_GPIO_Init()` | OLED.c | I2C引脚初始化 |
+| `HAL_Delay()` | OLED.c | 延时函数 |
+
+**示例：适配ESP32**
+```c
+void OLED_W_SCL(uint8_t BitValue)
+{
+    gpio_set_level(GPIO_NUM_18, BitValue);
+}
+
+void OLED_W_SDA(uint8_t BitValue)
+{
+    gpio_set_level(GPIO_NUM_19, BitValue);
+}
+```
+
+---
+
+## 4. 核心数据结构
+
+### 4.1 菜单节点 (MENUITEM)
 
 ```c
 typedef struct MENUITEM {
@@ -75,7 +175,7 @@ typedef struct MENUITEM {
 } MENUITEM;
 ```
 
-### 3.2 导航栈 (MENU_STACK)
+### 4.2 导航栈 (MENU_STACK)
 
 ```c
 #define MENU_STACK_MAX_DEPTH  8    // 最大菜单深度
@@ -86,7 +186,7 @@ typedef struct {
 } MENU_STACK;
 ```
 
-### 3.3 按键定义
+### 4.3 按键定义
 
 ```c
 #define MENU_KEY_CONFIRM    1    // 确认键
@@ -97,9 +197,9 @@ typedef struct {
 
 ---
 
-## 4. 快速入门
+## 5. 快速入门
 
-### 4.1 最简菜单示例
+### 5.1 最简菜单示例
 
 ```c
 #include "Menu_Init.h"
@@ -117,7 +217,7 @@ int main(void) {
 }
 ```
 
-### 4.2 定义菜单节点
+### 5.2 定义菜单节点
 
 ```c
 MENUITEM menu_Main = {"主菜单", NULL, NULL, NULL, NULL, NULL};
@@ -125,7 +225,7 @@ MENUITEM menu_Setting = {"设置", NULL, NULL, NULL, NULL, NULL};
 MENUITEM menu_LED = {"LED开关", Action_LED, NULL, NULL, NULL, NULL};
 ```
 
-### 4.3 构建菜单关系
+### 5.3 构建菜单关系
 
 ```c
 void Menu_Init(void) {
@@ -143,9 +243,9 @@ void Menu_Init(void) {
 
 ---
 
-## 5. API函数详解
+## 6. API函数详解
 
-### 5.1 链表操作函数
+### 6.1 链表操作函数
 
 #### Menu_List_BindChild - 绑定父子菜单
 
@@ -243,7 +343,7 @@ void Menu_Init(void) {
 
 ---
 
-### 5.2 栈操作函数
+### 6.2 栈操作函数
 
 #### Menu_Stack_Init - 初始化导航栈
 
@@ -291,7 +391,7 @@ MENUITEM* Menu_Stack_GetTop(MENU_STACK *pStack);
 
 ---
 
-### 5.3 UI函数
+### 6.3 UI函数
 
 #### Menu_UI_Display - 刷新显示
 
@@ -323,7 +423,7 @@ if (key != 0) {
 
 ---
 
-## 6. 菜单构建步骤
+## 7. 菜单构建步骤
 
 ### 步骤1：定义菜单节点
 
@@ -397,9 +497,9 @@ int main(void) {
 
 ---
 
-## 7. 完整示例
+## 8. 完整示例
 
-### 7.1 示例场景
+### 8.1 示例场景
 
 假设我们要构建一个智能温控器的菜单系统，包含以下功能：
 
@@ -415,7 +515,7 @@ int main(void) {
 └── 关于设备          [显示信息]
 ```
 
-### 7.2 第一步：定义功能函数
+### 8.2 第一步：定义功能函数
 
 在 `Menu_Init.c` 中定义各个功能函数：
 
@@ -587,7 +687,7 @@ void Action_About(void) {
 }
 ```
 
-### 7.3 第二步：定义菜单节点
+### 8.3 第二步：定义菜单节点
 
 ```c
 /*---------------------------------- 一级菜单 ----------------------------------*/
@@ -648,7 +748,7 @@ static MENUITEM menu_Reset = {
 };
 ```
 
-### 7.4 第三步：构建菜单关系
+### 8.4 第三步：构建菜单关系
 
 ```c
 void Menu_Init(void) {
@@ -684,7 +784,7 @@ void Menu_Init(void) {
 }
 ```
 
-### 7.5 第四步：主函数调用
+### 8.5 第四步：主函数调用
 
 ```c
 #include "Menu_Init.h"
@@ -710,7 +810,7 @@ int main(void) {
 }
 ```
 
-### 7.6 菜单类型总结
+### 8.6 菜单类型总结
 
 | 菜单类型 | action字段 | pChildMenu字段 | 典型用途 |
 |----------|------------|----------------|----------|
@@ -719,7 +819,7 @@ int main(void) {
 | **参数型** | 非NULL | NULL | 参数调节，如"目标温度" |
 | **混合型** | 非NULL | 非NULL | 优先进入子菜单（不推荐） |
 
-### 7.7 绑定关系图示
+### 8.7 绑定关系图示
 
 ```
 绑定函数调用顺序与结果：
@@ -771,7 +871,7 @@ Menu_List_BindChild(&menu_TempSetting, &menu_Calibration);
 
 ---
 
-## 8. 常见问题
+## 9. 常见问题
 
 ### Q1: 如何修改显示行数？
 
@@ -925,11 +1025,11 @@ void Action_Brightness_Set(void) {
 
 ---
 
-## 9. Action函数编写指南
+## 10. Action函数编写指南
 
 Action函数是菜单系统的核心扩展点，本节详细介绍各类Action函数的编写规范。
 
-### 9.1 Action函数类型总览
+### 10.1 Action函数类型总览
 
 | 类型 | 特点 | 典型应用 | 是否需要while循环 |
 |------|------|----------|-------------------|
@@ -1009,7 +1109,7 @@ exit:
 }
 ```
 
-### 9.4 信息展示型Action
+### 10.4 信息展示型Action
 
 **特点**：显示信息，等待用户按返回键退出
 
@@ -1038,7 +1138,7 @@ void Action_About(void) {
 }
 ```
 
-### 9.5 确认对话框型Action
+### 10.5 确认对话框型Action
 
 **特点**：需要用户确认后才执行操作
 
@@ -1101,7 +1201,7 @@ exit:
 }
 ```
 
-### 9.6 Action函数编写模板
+### 10.6 Action函数编写模板
 
 #### 模板A：即时执行型
 
@@ -1163,7 +1263,7 @@ exit:
 }
 ```
 
-### 9.7 常见错误与修正
+### 10.7 常见错误与修正
 
 | 错误写法 | 正确写法 | 原因 |
 |----------|----------|------|
@@ -1173,7 +1273,7 @@ exit:
 | 忘记 `OLED_Clear()` | 进入/退出时清屏 | 避免残留 |
 | 忘记 `OLED_Update()` | 显示后调用 | 刷新屏幕 |
 
-### 9.8 完整示例：多级参数调节
+### 10.8 完整示例：多级参数调节
 
 ```c
 /**

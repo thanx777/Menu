@@ -8,7 +8,37 @@
  * @date    2024
  */
 
-#include "stm32f10x.h"
+/*============================================================================*/
+/*                          平台头文件选择                                     */
+/*============================================================================*/
+/*
+ * 使用说明：根据你的开发平台，选择对应的头文件
+ * 
+ * 方式1：标准库（STM32F10x）
+ *   #define MENU_USE_STD_LIB    1
+ *   #define MENU_USE_HAL_LIB    0
+ * 
+ * 方式2：HAL库（STM32F1xx）
+ *   #define MENU_USE_STD_LIB    0
+ *   #define MENU_USE_HAL_LIB    1
+ * 
+ * 方式3：其他平台（如ESP32、Arduino等）
+ *   #define MENU_USE_STD_LIB    0
+ *   #define MENU_USE_HAL_LIB    0
+ *   然后在下方添加你的平台头文件
+ */
+
+#define MENU_USE_STD_LIB    1
+#define MENU_USE_HAL_LIB    0
+
+#if MENU_USE_STD_LIB
+    #include "stm32f10x.h"
+#elif MENU_USE_HAL_LIB
+    #include "stm32f1xx_hal.h"
+#else
+    /* 其他平台头文件 */
+#endif
+
 #include "Menu_Def.h"
 #include "Menu_Func.h"
 #include "OLED.h"
